@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+httpx
+beautifulsoup4
+selectolax
+lxml
+jinja2
+playwright
+python-multipart
