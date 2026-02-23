@@ -1,97 +1,111 @@
-Full-stack web scraping system that extracts structured, section-aware content from static and JavaScript-rendered websites with interaction support and a JSON viewer frontend.
+# Lyftr Assignment — Universal Website Scraper (FastAPI)
 
-🧠 Overview
+A small FastAPI service that **scrapes a given URL and returns structured content** (page metadata + “sections” extracted from semantic HTML). It attempts a **static HTML fetch first**, and if the extracted text is too small it **falls back to rendering the page with Playwright** and performing basic interactions (click/scroll/pagination).
 
-It is a powerful web scraping tool built to:
+## What this provides
 
-Scrape both static and dynamic (JavaScript-rendered) web pages.
+- **API**
+  - `GET /healthz`: health check
+  - `POST /scrape`: scrape a URL (JSON in, JSON out)
+- **Web UI**
+  - `GET /`: simple form to call `/scrape` and view JSON output in the browser
 
-Support interaction flows like clicks, form fills, pagination, etc.
+## How scraping works (high level)
 
-Extract section-aware structured content (headings, paragraphs, lists, etc.).
+- **Static scrape first**: fetches HTML via `httpx`, parses with BeautifulSoup (`lxml` parser), and extracts:
+  - page meta: title, description, language, canonical
+  - sections from semantic containers: `section`, `article`, `main`, `header`, `footer`
+  - per section: headings, text, links, images, lists
+  - `rawHtml` is truncated to **1000 chars** and marked via `truncated`
+- **JS fallback** (when extracted text is small): uses Playwright (Chromium, headless) to:
+  - wait for `networkidle`
+  - click up to 3 buttons with labels containing keywords like `"more"`, `"show"`, `"tab"`
+  - scroll 3 times
+  - follow a “Next” pagination link up to a small depth
+  - returns an `interactions` object (`clicks`, `scrolls`, `pages`)
 
-Provide a JSON viewer frontend to inspect scraped data.
+More detail lives in `design_notes.md` and `capabilities.json`.
 
-Expose an API backend for integration with other services/applications.
+## Requirements
 
-This system is ideal for projects where you need reliable and flexible data extraction from modern web pages.
+- **Python**: recommended **3.10+**
+- **Playwright browsers**: installed via `python -m playwright install`
 
-🔧 Features
+Python dependencies are listed in `requirements.txt`.
 
-✔ Static and dynamic scraping using a headless browser
-✔ Interaction support (clicks, scrolls, input simulation)
-✔ Structured JSON output with section context
-✔ JSON Viewer frontend for easy inspection
-✔ REST API with backend service
-✔ Command line launch script
+## Quickstart
 
-📁 Repository Structure
-.
-├── app/                     # Backend + Frontend application code
-├── capabilities.json        # Scraping capabilities config
-├── design_notes.md          # Architecture and design planning
-├── requirements.txt         # Python dependencies
-├── run.sh                  # Helper script to start the system
-└── README.md                # ← You’re here
+### Windows (PowerShell)
 
+```powershell
+cd E:\Projects\lyftr-assignment
 
-Note: Backend (likely FastAPI or similar) and frontend (React/HTML) live inside app/. You can expand this section once you add details.
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 
-📦 Requirements
-
-Install the dependencies listed in requirements.txt:
-
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 
+python -m playwright install
 
-(You can also use a virtual environment like venv or conda.)
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
-🚀 Getting Started
-🛠 Run Locally
+Then open:
+- `http://localhost:8000/` (UI)
+- `http://localhost:8000/docs` (Swagger / OpenAPI)
 
-Make sure you have Python installed (3.8+), then:
+### macOS / Linux (bash)
 
-# Give execution permission (if on Linux / macOS)
-chmod +x run.sh
+You can use the provided `run.sh`:
 
-# Run the scraper system
+```bash
 ./run.sh
+```
 
+Or run manually:
 
-This script is expected to start both the backend API server and optionally the frontend UI. (Update this section if the script has specific flags.)
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
 
-📡 API Endpoints
+## API usage
 
-The backend likely serves REST routes — for example:
+### Health check
 
-GET  /api/scrape?url=<target-url>
-POST /api/scrape
+```bash
+curl http://localhost:8000/healthz
+```
 
+### Scrape a URL
 
-Return format is structured JSON:
+```bash
+curl -X POST http://localhost:8000/scrape \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://example.com\"}"
+```
 
-{
-  "url": "...",
-  "sections": [
-    { "heading": "About", "content": "..." },
-    { "heading": "Features", "content": "..." }
-  ]
-}
+### Response shape (overview)
 
+`POST /scrape` returns:
 
-Replace with real endpoints once verified.
+- `result.url`: requested URL
+- `result.scrapedAt`: UTC timestamp
+- `result.meta`: title/description/language/canonical
+- `result.sections[]`: extracted semantic sections
+- `result.interactions`: click/scroll/pagination actions (especially relevant for JS fallback)
+- `result.errors[]`: currently returned as an empty list
 
-🧪 Example
-curl "http://localhost:8000/api/scrape?url=https://example.com"
+## Project structure
 
+- `app/main.py`: FastAPI app + routes
+- `app/scraper/static.py`: static HTTP fetch + section extraction
+- `app/scraper/js.py`: Playwright rendering + simple interactions
+- `app/templates/index.html`: minimal UI
+- `design_notes.md`: scraping strategy notes
+- `capabilities.json`: feature flags/capabilities summary
 
-Response:
-
-{
-  "status": "success",
-  "data": { ... }
-}
-
-🧩 Design & Architecture
-
-The design_notes.md includes system design thinking (scraping strategy, capability JSON usage, scraper extents, etc.). Use it to update your documentation and architecture diagrams later.
